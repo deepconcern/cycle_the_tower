@@ -2,10 +2,17 @@ mod drag;
 mod enemy;
 mod mouse;
 
-use bevy::{math::{bounding::Aabb2d, VectorSpace}, prelude::*, render::view::RenderLayers};
+use bevy::{
+    math::bounding::{Aabb2d, IntersectsVolume},
+    prelude::*,
+    render::view::RenderLayers,
+};
 use bevy_prng::WyRand;
-use bevy_rand::{plugin::EntropyPlugin, prelude::{GlobalEntropy, ForkableRng}};
-use drag::{DragPlugin, DragState, Draggable};
+use bevy_rand::{
+    plugin::EntropyPlugin,
+    prelude::{ForkableRng, GlobalEntropy},
+};
+use drag::{DragEvent, DragPlugin, DragState, Draggable};
 use enemy::{Enemy, EnemyHealthText, EnemyNameText, EnemyPlugin};
 use mouse::{MousePlugin, MousePosition};
 use rand::seq::IteratorRandom;
@@ -22,9 +29,9 @@ const ENEMY_DISPLAY_TRANSLATION: Vec3 = Vec3::new(0.0, UNIT_SIZE * 6.0, 0.0);
 const ENEMY_SPRITE_SIZE: f32 = 64.0;
 
 // Player display
+const CARD_DROP_TARGET_SIZE: f32 = 8.0;
 const CARD_SPRITE_SIZE: f32 = 32.0;
 const PLAYER_DISPLAY_TRANSLATION: Vec3 = Vec3::new(0.0, -(UNIT_SIZE * 6.0), 0.0);
-
 
 #[derive(Resource)]
 struct Player {
@@ -49,6 +56,9 @@ enum CardType {
 }
 
 #[derive(Component)]
+struct CardDropTarget;
+
+#[derive(Component)]
 struct Card(CardType);
 
 #[derive(Component)]
@@ -58,13 +68,20 @@ struct HandPosition(usize);
 struct CommandPosition(usize);
 
 #[derive(Component)]
-enum CardPosition {
+struct CardPosition {
+    position_type: CardPositionType,
+}
+
+enum CardPositionType {
     Command(usize),
     Hand(usize),
 }
 
-
-fn setup_cameras(asset_server: Res<AssetServer>, mut commands: Commands, mut images: ResMut<Assets<Image>>) {
+fn setup_cameras(
+    asset_server: Res<AssetServer>,
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+) {
     // let size = Extent3d {
     //     height: GAME_HEIGHT as u32,
     //     width: GAME_WIDTH as u32,
@@ -109,127 +126,176 @@ fn setup_scene(asset_server: Res<AssetServer>, mut commands: Commands) {
 
     let font_handle = asset_server.load("fonts/press_start_2p.ttf");
 
+    // Textures
+
+    let card_target_texture_handle = asset_server.load("card_target.png");
+
     // Enemy display
 
-    commands.spawn(SpatialBundle {
-        transform: Transform {
-            translation: ENEMY_DISPLAY_TRANSLATION,
-            ..default()
-        },
-        ..default()
-    }).with_children(|parent| {
-        let enemy_name_y = (ENEMY_SPRITE_SIZE) + UNIT_SIZE;
-        let enemy_info_y = -((ENEMY_SPRITE_SIZE) + UNIT_SIZE);
-
-        // Enemy sprite display
-
-        parent.spawn((Enemy::new("Rat", 100), SpriteBundle {
-            texture: asset_server.load("rat.png"),
+    commands
+        .spawn(SpatialBundle {
             transform: Transform {
-                scale: Vec3::splat(SCALE_FACTOR),
+                translation: ENEMY_DISPLAY_TRANSLATION,
                 ..default()
             },
             ..default()
-        }));
+        })
+        .with_children(|parent| {
+            let enemy_name_y = (ENEMY_SPRITE_SIZE) + UNIT_SIZE;
+            let enemy_info_y = -((ENEMY_SPRITE_SIZE) + UNIT_SIZE);
 
-        // Enemy name
+            // Background
 
-        parent.spawn((
-            EnemyNameText,
-            Text2dBundle {
-                text: Text::from_section("EnemyNameText", TextStyle {
-                    font: font_handle.clone(),
-                    ..default()
-                }),
+            parent.spawn(SpriteBundle {
+                texture: asset_server.load("enemy_background.png"),
                 transform: Transform {
-                    translation: Vec3::new(0.0, enemy_name_y, 0.0),
+                    scale: Vec3::splat(SCALE_FACTOR),
                     ..default()
                 },
                 ..default()
-            },
-        ));
+            });
 
-        // Info area
-
-        parent.spawn(SpatialBundle {
-            transform: Transform {
-                translation: Vec3::new(0.0, enemy_info_y, 0.0),
-                ..default()
-            },
-            ..default()
-        }).with_children(|parent| {
-            // Enemy health
+            // Enemy sprite display
 
             parent.spawn((
-                EnemyHealthText,
-                Text2dBundle {
+                Enemy::new("Rat", 100),
+                SpriteBundle {
+                    texture: asset_server.load("rat.png"),
                     transform: Transform {
-                        translation: Vec3::new(-(UNIT_SIZE * 7.0), 0.0, 0.0),
+                        scale: Vec3::splat(SCALE_FACTOR),
                         ..default()
                     },
-                    text: Text::from_section("EnemyHealthText", TextStyle {
-                        font: font_handle.clone(),
-                        ..default()
-                    }),
                     ..default()
                 },
             ));
 
-            //Enemy actions
+            // Enemy name
 
-            parent.spawn(Text2dBundle {
-                transform: Transform {
-                    translation: Vec3::new(UNIT_SIZE * 7.0, 0.0, 0.0),
+            parent.spawn((
+                EnemyNameText,
+                Text2dBundle {
+                    text: Text::from_section(
+                        "EnemyNameText",
+                        TextStyle {
+                            font: font_handle.clone(),
+                            ..default()
+                        },
+                    ),
+                    transform: Transform {
+                        translation: Vec3::new(0.0, enemy_name_y, 0.0),
+                        ..default()
+                    },
                     ..default()
                 },
-                text: Text::from_section("Next actions: ?, ?, ?", TextStyle {
-                    font: font_handle.clone(),
+            ));
+
+            // Info area
+
+            parent
+                .spawn(SpatialBundle {
+                    transform: Transform {
+                        translation: Vec3::new(0.0, enemy_info_y, 0.0),
+                        ..default()
+                    },
                     ..default()
-                }),
-                ..default()
-            });
+                })
+                .with_children(|parent| {
+                    // Enemy health
+
+                    parent.spawn((
+                        EnemyHealthText,
+                        Text2dBundle {
+                            transform: Transform {
+                                translation: Vec3::new(-(UNIT_SIZE * 7.0), 0.0, 0.0),
+                                ..default()
+                            },
+                            text: Text::from_section(
+                                "EnemyHealthText",
+                                TextStyle {
+                                    font: font_handle.clone(),
+                                    ..default()
+                                },
+                            ),
+                            ..default()
+                        },
+                    ));
+
+                    //Enemy actions
+
+                    parent.spawn(Text2dBundle {
+                        transform: Transform {
+                            translation: Vec3::new(UNIT_SIZE * 7.0, 0.0, 0.0),
+                            ..default()
+                        },
+                        text: Text::from_section(
+                            "Next actions: ?, ?, ?",
+                            TextStyle {
+                                font: font_handle.clone(),
+                                ..default()
+                            },
+                        ),
+                        ..default()
+                    });
+                });
         });
-    });
 
     // Input area
 
-    commands.spawn(SpatialBundle::default()).with_children(|parent| {
-        parent.spawn(Text2dBundle {
-            text: Text::from_section("Input Area", TextStyle {
-                font: font_handle.clone(),
-                ..default()
-            }),
-            ..default()
+    commands
+        .spawn(SpatialBundle::default())
+        .with_children(|parent| {
+            for i in 0..3 {
+                let translation =
+                    Vec3::new((i as f32) * (2.0 * UNIT_SIZE * SCALE_FACTOR), 0.0, 0.0);
+
+                parent.spawn((
+                    CardDropTarget,
+                    CommandPosition(i),
+                    SpriteBundle {
+                        texture: card_target_texture_handle.clone(),
+                        transform: Transform {
+                            scale: Vec3::splat(SCALE_FACTOR),
+                            translation,
+                            ..default()
+                        },
+                        ..default()
+                    },
+                ));
+            }
         });
-    });
 
     // Player display
 
-    commands.spawn(SpatialBundle {
-        transform: Transform {
-            translation: PLAYER_DISPLAY_TRANSLATION,
+    commands
+        .spawn(SpatialBundle {
+            transform: Transform {
+                translation: PLAYER_DISPLAY_TRANSLATION,
+                ..default()
+            },
             ..default()
-        },
-        ..default()
-    }).with_children(|parent| {
-        // Hand
+        })
+        .with_children(|parent| {
+            // Hand
 
-        for i in 0..3 {
-            let translation = Vec3::new((i as f32) * (2.0 * UNIT_SIZE * SCALE_FACTOR), 0.0, 0.0);
+            for i in 0..3 {
+                let translation =
+                    Vec3::new((i as f32) * (2.0 * UNIT_SIZE * SCALE_FACTOR), 0.0, 0.0);
 
-            parent.spawn((
-                HandPosition(i),
-                Draggable::Aabb(Aabb2d::new(translation.truncate(), Vec2::splat(CARD_SPRITE_SIZE * SCALE_FACTOR * 0.5))),
-                SpatialBundle {
-                    transform: Transform {
-                        translation,
+                parent.spawn((
+                    CardDropTarget,
+                    HandPosition(i),
+                    SpriteBundle {
+                        texture: card_target_texture_handle.clone(),
+                        transform: Transform {
+                            scale: Vec3::splat(SCALE_FACTOR),
+                            translation,
+                            ..default()
+                        },
                         ..default()
                     },
-                    ..default()
-                },
-            ));
-        }
-    });
+                ));
+            }
+        });
 }
 
 fn card_display(mut card_query: Query<(&mut Card, &mut TextureAtlas)>) {
@@ -237,18 +303,23 @@ fn card_display(mut card_query: Query<(&mut Card, &mut TextureAtlas)>) {
         match card.0 {
             CardType::Attack => {
                 texture_atlas.index = 0;
-            },
+            }
             CardType::Guard => {
                 texture_atlas.index = 1;
-            },
+            }
             CardType::None => {
                 texture_atlas.index = 3;
-            },
+            }
         }
     }
 }
 
-fn initial_hand(asset_server: Res<AssetServer>, mut commands: Commands, mut global_rng: ResMut<GlobalEntropy<WyRand>>, mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>) {
+fn initial_hand(
+    asset_server: Res<AssetServer>,
+    mut commands: Commands,
+    mut global_rng: ResMut<GlobalEntropy<WyRand>>,
+    mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
+) {
     // Card texture and layout
 
     let card_texture_handle = asset_server.load("cards.png");
@@ -266,8 +337,13 @@ fn initial_hand(asset_server: Res<AssetServer>, mut commands: Commands, mut glob
     for i in 0..3 {
         commands.spawn((
             Card(choices.iter().choose(&mut rng).unwrap().clone()),
-            CardPosition::Hand(i),
-            Draggable::Aabb(Aabb2d::new(Vec2::ZERO, Vec2::splat(CARD_SPRITE_SIZE * SCALE_FACTOR * 0.5))),
+            CardPosition {
+                position_type: CardPositionType::Hand(i),
+            },
+            Draggable::Aabb(Aabb2d::new(
+                Vec2::ZERO,
+                Vec2::splat(CARD_SPRITE_SIZE * SCALE_FACTOR * 0.5),
+            )),
             SpriteBundle {
                 texture: card_texture_handle.clone(),
                 transform: Transform {
@@ -290,42 +366,96 @@ fn card_aabb(mut card_query: Query<(&mut Draggable, &mut GlobalTransform), With<
     }
 }
 
+fn card_drop(
+    mut card_query: Query<&mut CardPosition>,
+    command_drop_target_query: Query<(&GlobalTransform, &CommandPosition), With<CardDropTarget>>,
+    mut drag_event_reader: EventReader<DragEvent>,
+    hand_drop_target_query: Query<(&GlobalTransform, &HandPosition), With<CardDropTarget>>,
+) {
+    for event in drag_event_reader.read() {
+        println!("DEBUG: event = {:?}", event);
 
-fn card_position(mut card_query: Query<(&mut CardPosition, Entity, &mut Transform), With<Card>>, command_position_query: Query<(&GlobalTransform, &CommandPosition)>, drag_state: Res<DragState>, hand_position: Query<(&GlobalTransform, &HandPosition)>) {
+        let card_aabb = Aabb2d::new(
+            event.draggable_position,
+            Vec2::splat(CARD_SPRITE_SIZE * SCALE_FACTOR * 0.5),
+        );
+        let mut position = card_query.get_mut(event.draggable_id).unwrap();
+        let half_size = Vec2::splat(CARD_DROP_TARGET_SIZE * SCALE_FACTOR * 0.5);
+
+        // Check hand
+
+        for (global_transform, hand_position) in hand_drop_target_query.iter() {
+            let target_aabb = Aabb2d::new(global_transform.translation().truncate(), half_size);
+
+            if card_aabb.intersects(&target_aabb) {
+                position.position_type = CardPositionType::Hand(hand_position.0);
+
+                return;
+            }
+        }
+
+        // Check command
+
+        for (global_transform, command_position) in command_drop_target_query.iter() {
+            let target_aabb = Aabb2d::new(global_transform.translation().truncate(), half_size);
+
+            if card_aabb.intersects(&target_aabb) {
+                position.position_type = CardPositionType::Command(command_position.0);
+
+                return;
+            }
+        }
+    }
+}
+
+fn card_position(
+    mut card_query: Query<(&mut CardPosition, Entity, &mut Transform), With<Card>>,
+    command_position_query: Query<(&GlobalTransform, &CommandPosition)>,
+    drag_state: Res<DragState>,
+    hand_position: Query<(&GlobalTransform, &HandPosition)>,
+) {
     for (card_position, entity, mut transform) in card_query.iter_mut() {
         // Don't interfere with dragging
         if Some(entity) == drag_state.current_entity {
             continue;
         }
 
-        match card_position.into_inner() {
-            CardPosition::Command(index) => {
+        match card_position.position_type {
+            CardPositionType::Command(index) => {
                 for (global_transform, command_position) in command_position_query.iter() {
                     if command_position.0 == index.clone() {
                         transform.translation = global_transform.translation();
                     }
                 }
-            },
-            CardPosition::Hand(index) => {
+            }
+            CardPositionType::Hand(index) => {
                 for (global_transform, hand_position) in hand_position.iter() {
                     if hand_position.0 == index.clone() {
                         transform.translation = global_transform.translation();
                     }
                 }
-            },
+            }
         }
     }
 }
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
-        .add_plugins(DragPlugin)
-        .add_plugins(EnemyPlugin)
-        .add_plugins(EntropyPlugin::<WyRand>::default())
-        .add_plugins(MousePlugin)
+        .add_plugins((
+            DefaultPlugins.set(ImagePlugin::default_nearest()).set(WindowPlugin {
+                primary_window: Some(Window {
+                    resolution: (GAME_WIDTH * SCALE_FACTOR, GAME_HEIGHT * SCALE_FACTOR).into(),
+                    ..default()
+                }),
+                ..default()
+            }),
+            DragPlugin,
+            EnemyPlugin,
+            EntropyPlugin::<WyRand>::default(),
+            MousePlugin,
+        ))
         .add_systems(Startup, (setup_cameras, setup_scene, initial_hand).chain())
-        .add_systems(Update, (card_aabb, card_display, card_position))
+        .add_systems(Update, (card_aabb, card_display, card_drop, card_position))
         .init_resource::<Player>()
         .run();
 }

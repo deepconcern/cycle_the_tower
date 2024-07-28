@@ -46,34 +46,10 @@ impl IntersectsVolume<BoundingCircle> for Draggable {
     }
 }
 
-#[derive(Component, Debug)]
-pub enum DragTarget {
-    Aabb(Aabb2d),
-    BoundingCircle(BoundingCircle),
-}
-
-impl IntersectsVolume<Aabb2d> for DragTarget {
-    fn intersects(&self, volume: &Aabb2d) -> bool {
-        match self {
-            Self::Aabb(aabb) => aabb.intersects(volume),
-            Self::BoundingCircle(bouding_circle) => bouding_circle.intersects(volume),
-        }
-    }
-}
-
-impl IntersectsVolume<BoundingCircle> for DragTarget {
-    fn intersects(&self, volume: &BoundingCircle) -> bool {
-        match self {
-            Self::Aabb(aabb) => aabb.intersects(volume),
-            Self::BoundingCircle(bouding_circle) => bouding_circle.intersects(volume),
-        }
-    }
-}
-
-#[derive(Event)]
+#[derive(Debug, Event)]
 pub struct DragEvent {
-    pub entity_id: Entity,
-    pub position: Vec2,
+    pub draggable_id: Entity,
+    pub draggable_position: Vec2,
 }
 
 #[derive(Resource)]
@@ -94,8 +70,6 @@ fn drag(drag_state: Res<DragState>, mut draggable_query: Query<&mut Transform>, 
         return;
     };
 
-
-
     let mut transform = draggable_query.get_mut(dragging_entity_id).unwrap();
 
     transform.translation = mouse_position.0.extend(0.0);
@@ -111,8 +85,6 @@ fn handle_draggable_press(
             continue;
         }
 
-        println!("DEBUG dragging start");
-
         drag_state.current_entity = Some(entity_id);
     }
 }
@@ -126,13 +98,11 @@ fn handle_draggable_release(
         return;
     };
 
-    println!("DEBUG dragging end");
-
     drag_state.current_entity = None;
 
     drag_event_writer.send(DragEvent {
-        entity_id,
-        position: mouse_position.0.clone(),
+        draggable_id: entity_id,
+        draggable_position: mouse_position.0.clone(),
     });
 }
 
