@@ -5,7 +5,10 @@ edition = "2021"
 
 [dependencies]
 bevy = "0.14.0"
-bevy_dylib = "0.14.0"
+bevy_dylib = "0.14"
+bevy_rand = "0.7"
+bevy_prng = { version = "0.7", features = ["rand_chacha", "wyrand"] }
+rand = "0.8"
 
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]
