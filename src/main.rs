@@ -1,6 +1,8 @@
 mod enemy;
 mod mouse;
 
+use std::time::Duration;
+
 use bevy::{prelude::*, sprite::Anchor, text::Text2dBounds};
 use bevy_prng::WyRand;
 use bevy_rand::plugin::EntropyPlugin;
@@ -130,7 +132,14 @@ struct InfoPanelTarget;
 struct BattleInfoText;
 
 #[derive(Default, Resource)]
-struct BattleInfoTimer(Timer);
+struct BattleInfoTimer(Option<Timer>);
+
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq, States)]
+enum BattleState {
+    Enemy,
+    #[default]
+    Player,
+}
 
 #[derive(Component)]
 struct Hero(usize);
@@ -717,6 +726,7 @@ fn menu_select(
 
 fn handle_event(
     mut action_event_reader: EventReader<ActionEvent>,
+    mut battle_info_timer: ResMut<BattleInfoTimer>,
     mut info_text_query: Query<&mut Text, With<BattleInfoText>>,
 ) {
     for event in action_event_reader.read() {
@@ -741,6 +751,35 @@ fn handle_event(
                 },
                 ActionEvent::Enemy => format!("Rat attacks for {} damage!", ENEMY_ATTACK_DAMAGE),
             };
+        }
+
+        battle_info_timer.0 = Some(Timer::new(Duration::from_secs(5), TimerMode::Once));
+    }
+}
+
+fn tick_battle_info_timer(
+    mut action_event_writer: EventWriter<ActionEvent>,
+    mut battle_info_timer: ResMut<BattleInfoTimer>,
+    mut next_battle_state: ResMut<NextState<BattleState>>,
+    mut next_info_state: ResMut<NextState<InfoPanelState>>,
+    state: Res<State<BattleState>>,
+    time: Res<Time>,
+) {
+    let Some(timer) = battle_info_timer.0.as_mut() else {
+        return;
+    };
+
+    timer.tick(time.delta());
+
+    if timer.just_finished() {
+        match state.into_inner().get() {
+            BattleState::Enemy => {
+                next_info_state.set(InfoPanelState::Menu);
+            }
+            BattleState::Player => {
+                next_battle_state.set(BattleState::Enemy);
+                action_event_writer.send(ActionEvent::Enemy);
+            }
         }
     }
 }
@@ -773,7 +812,7 @@ fn main() {
                 hero_arrow,
                 hero_health_status,
                 hero_sleep_status,
-                handle_event.run_if(in_state(InfoPanelState::Battle)),
+                (handle_event, tick_battle_info_timer).run_if(in_state(InfoPanelState::Battle)),
                 (menu_cursor, menu_cursor_change, menu_options, menu_select)
                     .run_if(in_state(InfoPanelState::Menu)),
             ),
@@ -781,6 +820,7 @@ fn main() {
         .init_resource::<BattleInfoTimer>()
         .init_resource::<MenuSelection>()
         .init_resource::<Player>()
+        .init_state::<BattleState>()
         .init_state::<InfoPanelState>()
         .run();
 }
