@@ -141,8 +141,10 @@ struct BattleInfoTimer(Option<Timer>);
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq, States)]
 enum BattleState {
     Enemy,
+    Lose,
     #[default]
     Player,
+    Win,
 }
 
 #[derive(Component)]
@@ -703,7 +705,7 @@ fn cycle_hero(player: &mut Player) {
         max_iteration -= 1;
 
         if max_iteration == 0 {
-            panic!("MAX ITERATION");
+            break;
         }
 
         if player.current_hero == 2 {
@@ -790,18 +792,19 @@ fn handle_event(
     mut action_event_reader: EventReader<ActionEvent>,
     mut battle_info_timer: ResMut<BattleInfoTimer>,
     mut enemy_query: Query<&mut Enemy>,
+    mut next_state: ResMut<NextState<BattleState>>,
     mut player: ResMut<Player>,
     mut info_text_query: Query<&mut Text, With<BattleInfoText>>,
 ) {
     for event in action_event_reader.read() {
+        let mut enemy = enemy_query.single_mut();
+
         for mut text in info_text_query.iter_mut() {
             text.sections[0].value = match event {
                 ActionEvent::Player(player_action) => match player_action {
                     PlayerAction::Mage(mage_action) => {
                         match mage_action {
                             MageAction::Missle => {
-                                let mut enemy = enemy_query.single_mut();
-    
                                 enemy.current_hp -= MAGIC_MISSLE_DAMAGE as isize;
     
                                 format!("Mage cast Magic Missle for {} damage!", MAGIC_MISSLE_DAMAGE)
@@ -826,22 +829,16 @@ fn handle_event(
                         }
                     },
                     PlayerAction::Warrior(warrior_action) => match warrior_action {
-                        WarriorAction::Attack => {
-                            let mut enemy = enemy_query.single_mut();
-
-                            enemy.current_hp -= ATTACK_DAMAGE as isize;
+                        WarriorAction::Attack => {enemy.current_hp -= ATTACK_DAMAGE as isize;
                             
                             format!("Warrior attacks for {} damage!", ATTACK_DAMAGE)
                         },
                         WarriorAction::Block => {
                             player.is_warrior_blocking = true;
 
-                            "Warrio blocks!".to_string()
+                            "Warrior blocks!".to_string()
                         },
-                        WarriorAction::Reckless => {
-                            let mut enemy = enemy_query.single_mut();
-
-                            enemy.current_hp -= RECKLESS_ATTACK_DAMAGE as isize;
+                        WarriorAction::Reckless => {enemy.current_hp -= RECKLESS_ATTACK_DAMAGE as isize;
 
                             player.current_hps[0] -= RECKLESS_ATTACK_DAMAGE as isize;
 
@@ -869,15 +866,20 @@ fn handle_event(
             };
         }
 
+        if enemy.current_hp <= 0 {
+            next_state.set(BattleState::Win);
+        } else if player.current_hps[0] <= 0 && player.current_hps[1] <= 0 && player.current_hps[2] <= 0 {
+            next_state.set(BattleState::Lose);
+        }
+        
         battle_info_timer.0 = Some(Timer::new(Duration::from_secs(3), TimerMode::Once));
     }
 }
 
-
-
 fn tick_battle_info_timer(
     mut action_event_writer: EventWriter<ActionEvent>,
     mut battle_info_timer: ResMut<BattleInfoTimer>,
+    mut info_text_query: Query<&mut Text, With<BattleInfoText>>,
     mut next_battle_state: ResMut<NextState<BattleState>>,
     mut next_info_state: ResMut<NextState<InfoPanelState>>,
     mut player: ResMut<Player>,
@@ -923,7 +925,17 @@ fn tick_battle_info_timer(
             BattleState::Player => {
                 next_battle_state.set(BattleState::Enemy);
                 action_event_writer.send(ActionEvent::Enemy);
-            }
+            },
+            BattleState::Lose=> {
+                for mut text in info_text_query.iter_mut() {
+                    text.sections[0].value = "You lose!".to_string();
+                }
+            },
+            BattleState::Win=> {
+                for mut text in info_text_query.iter_mut() {
+                    text.sections[0].value = "You win!".to_string();
+                }
+            },
         }
     }
 }
