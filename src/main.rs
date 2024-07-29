@@ -129,7 +129,7 @@ struct InfoPanelTarget;
 #[derive(Component)]
 struct BattleInfoText;
 
-#[derive(Resource)]
+#[derive(Default, Resource)]
 struct BattleInfoTimer(Timer);
 
 #[derive(Component)]
@@ -778,6 +778,7 @@ fn main() {
                     .run_if(in_state(InfoPanelState::Menu)),
             ),
         )
+        .init_resource::<BattleInfoTimer>()
         .init_resource::<MenuSelection>()
         .init_resource::<Player>()
         .init_state::<InfoPanelState>()
