@@ -55,9 +55,11 @@ const HEAL_AMOUNT: u32 = 3;
 
 #[derive(Resource)]
 struct Player {
-    current_hps: [usize; 3],
+    current_hps: [isize; 3],
     current_hero: usize,
-    max_hps: [usize; 3],
+    is_warrior_blocking: bool,
+    max_hps: [isize; 3],
+    shielded: [usize; 3],
     sleep_state: [bool; 3],
 }
 
@@ -66,7 +68,9 @@ impl Default for Player {
         Self {
             current_hps: [10, 20, 10],
             current_hero: 0,
+            is_warrior_blocking: false,
             max_hps: [10, 20, 10],
+            shielded: [0, 0, 0],
             sleep_state: [false, false, false],
         }
     }
@@ -146,6 +150,9 @@ struct Hero(usize);
 
 #[derive(Component)]
 struct HeroHealthText(usize);
+
+#[derive(Component)]
+struct HeroStatusText(usize);
 
 #[derive(Component)]
 struct HeroArrow;
@@ -375,6 +382,27 @@ fn setup_scene(
                             ))
                             .with_children(|parent| {
                                 parent.spawn((
+                                    HeroStatusText(i),
+                                    Text2dBundle {
+                                        text: Text::from_section(
+                                            "HeroStatusText",
+                                            TextStyle {
+                                                color: Color::NONE,
+                                                font: font_handle.clone(),
+                                                font_size: 10.0,
+                                                ..default()
+                                            },
+                                        ),
+                                        transform: Transform {
+                                            scale: Vec3::splat(0.5), // Undo parent scaling.. oops..
+                                            translation: Vec3::ZERO,
+                                            ..default()
+                                        },
+                                        ..default()
+                                    },
+                                ));
+
+                                parent.spawn((
                                     HeroHealthText(i),
                                     Text2dBundle {
                                         text: Text::from_section(
@@ -485,12 +513,26 @@ fn hero_health_status(
         }
     }
 }
-
-fn hero_sleep_status(mut hero_query: Query<(&mut Hero, &mut TextureAtlas)>, player: Res<Player>) {
+fn hero_animation(mut hero_query: Query<(&mut Hero, &mut TextureAtlas)>, player: Res<Player>) {
     for (hero, mut texture_atlas) in hero_query.iter_mut() {
+        let is_dead = player.current_hps[hero.0] <= 0;
         let is_sleeping = player.sleep_state[hero.0];
 
-        texture_atlas.index = (hero.0 * 2) + (if is_sleeping { 1 } else { 0 });
+        texture_atlas.index = (hero.0 * 2) + (if is_dead || is_sleeping { 1 } else { 0 });
+    }
+}
+
+fn hero_status(player: Res<Player>, mut text_query: Query<(&mut HeroStatusText, &mut Text)>,) {
+    for (hero_status_text, mut text) in text_query.iter_mut() {
+        if player.current_hps[hero_status_text.0] <= 0 {
+            text.sections[0].value = "DEAD".to_string();
+            text.sections[0].style.color = Color::default();
+        } else if player.sleep_state[hero_status_text.0] {
+            text.sections[0].value = "SLEEP".to_string();
+            text.sections[0].style.color = Color::default();
+        } else {
+            text.sections[0].style.color = Color::NONE;
+        }
     }
 }
 
@@ -658,21 +700,27 @@ fn menu_options(mut menu_option_query: Query<(&mut MenuOption, &mut Text)>, play
 fn cycle_hero(player: &mut Player) {
     let mut max_iteration = 100;
     loop {
+        max_iteration -= 1;
+
+        if max_iteration == 0 {
+            panic!("MAX ITERATION");
+        }
+
         if player.current_hero == 2 {
             player.current_hero = 0;
         } else {
             player.current_hero += 1;
         }
 
-        if !player.sleep_state[player.current_hero] {
-            break;
+        if player.current_hps[player.current_hero] <= 0 {
+            continue;
         }
 
-        max_iteration -= 1;
-
-        if max_iteration == 0 {
-            panic!("MAX ITERATION");
+        if player.sleep_state[player.current_hero] {
+            continue;
         }
+
+        break;
     }
 }
 
@@ -724,44 +772,115 @@ fn menu_select(
     }
 }
 
+fn heal_action(hero: usize, hero_name: &str, player: &mut Player) -> String {
+    if player.current_hps[hero] <= 0 {
+        return "Priest cannot raise the dead".to_string();
+    }
+
+    player.current_hps[hero] += HEAL_AMOUNT as isize;
+
+    if player.current_hps[hero] > player.max_hps[hero] {
+        player.current_hps[hero] = player.max_hps[hero];
+    }
+
+    format!("Priest heals {} for {}!", hero_name, HEAL_AMOUNT)
+}
+
 fn handle_event(
     mut action_event_reader: EventReader<ActionEvent>,
     mut battle_info_timer: ResMut<BattleInfoTimer>,
+    mut enemy_query: Query<&mut Enemy>,
+    mut player: ResMut<Player>,
     mut info_text_query: Query<&mut Text, With<BattleInfoText>>,
 ) {
     for event in action_event_reader.read() {
         for mut text in info_text_query.iter_mut() {
             text.sections[0].value = match event {
                 ActionEvent::Player(player_action) => match player_action {
-                    PlayerAction::Mage(mage_action) => match mage_action {
-                        MageAction::Missle => format!("Mage cast Magic Missle for {} damage!", MAGIC_MISSLE_DAMAGE),
-                        MageAction::ShieldPriest => "Mage cast shield on Priest!".to_string(),
-                        MageAction::ShieldWarrior => "Mage cast shield on Warrior!".to_string(),
+                    PlayerAction::Mage(mage_action) => {
+                        match mage_action {
+                            MageAction::Missle => {
+                                let mut enemy = enemy_query.single_mut();
+    
+                                enemy.current_hp -= MAGIC_MISSLE_DAMAGE as isize;
+    
+                                format!("Mage cast Magic Missle for {} damage!", MAGIC_MISSLE_DAMAGE)
+                            },
+                            MageAction::ShieldPriest => {
+                                player.shielded[2] = 2;
+
+                                "Mage cast shield on Priest!".to_string()
+                            },
+                            MageAction::ShieldWarrior => {
+                                player.shielded[0] = 2;
+
+                                "Mage cast shield on Warrior!".to_string()
+                            },
+                        }
                     },
-                    PlayerAction::Priest(priest_action) => match priest_action {
-                        PriestAction::HealMage => format!("Priest heals Mage for {}!", HEAL_AMOUNT),
-                        PriestAction::HealSelf => format!("Priest heals self for {}!", HEAL_AMOUNT),
-                        PriestAction::HealWarrior => format!("Priest heals Warrior for {}!", HEAL_AMOUNT),
+                    PlayerAction::Priest(priest_action) => {
+                        match priest_action {
+                            PriestAction::HealMage => heal_action(1, "Mage", &mut player),
+                            PriestAction::HealSelf => heal_action(2, "self", &mut player),
+                            PriestAction::HealWarrior => heal_action(0, "Warrior", &mut player),
+                        }
                     },
                     PlayerAction::Warrior(warrior_action) => match warrior_action {
-                        WarriorAction::Attack => format!("Warrior attacks for {} damage!", ATTACK_DAMAGE),
-                        WarriorAction::Block => "Warrio blocks!".to_string(),
-                        WarriorAction::Reckless => format!("Warrior recklessly attacks for {} damage! Also receives the same damage!", RECKLESS_ATTACK_DAMAGE),
+                        WarriorAction::Attack => {
+                            let mut enemy = enemy_query.single_mut();
+
+                            enemy.current_hp -= ATTACK_DAMAGE as isize;
+                            
+                            format!("Warrior attacks for {} damage!", ATTACK_DAMAGE)
+                        },
+                        WarriorAction::Block => {
+                            player.is_warrior_blocking = true;
+
+                            "Warrio blocks!".to_string()
+                        },
+                        WarriorAction::Reckless => {
+                            let mut enemy = enemy_query.single_mut();
+
+                            enemy.current_hp -= RECKLESS_ATTACK_DAMAGE as isize;
+
+                            player.current_hps[0] -= RECKLESS_ATTACK_DAMAGE as isize;
+
+                            format!("Warrior recklessly attacks for {} damage! Also receives the same damage!", RECKLESS_ATTACK_DAMAGE)
+                        },
                     },
                 },
-                ActionEvent::Enemy => format!("Rat attacks for {} damage!", ENEMY_ATTACK_DAMAGE),
+                ActionEvent::Enemy => {
+                    let current_hero = player.current_hero;
+
+                    let mut damage = ENEMY_ATTACK_DAMAGE as isize;
+
+                    if current_hero == 0 && player.is_warrior_blocking {
+                        damage -= 2;
+                    }
+
+                    if player.shielded[current_hero] > 0 {
+                        damage -= 2;
+                    }
+
+                    player.current_hps[current_hero] -= damage as isize;
+
+                    format!("Rat attacks for {} damage!", damage)
+                },
             };
         }
 
-        battle_info_timer.0 = Some(Timer::new(Duration::from_secs(5), TimerMode::Once));
+        battle_info_timer.0 = Some(Timer::new(Duration::from_secs(3), TimerMode::Once));
     }
 }
+
+
 
 fn tick_battle_info_timer(
     mut action_event_writer: EventWriter<ActionEvent>,
     mut battle_info_timer: ResMut<BattleInfoTimer>,
     mut next_battle_state: ResMut<NextState<BattleState>>,
     mut next_info_state: ResMut<NextState<InfoPanelState>>,
+    mut player: ResMut<Player>,
     state: Res<State<BattleState>>,
     time: Res<Time>,
 ) {
@@ -774,6 +893,31 @@ fn tick_battle_info_timer(
     if timer.just_finished() {
         match state.into_inner().get() {
             BattleState::Enemy => {
+                let current_hero = player.current_hero;
+
+                // Reset things
+
+                if current_hero == 0 {
+                    player.is_warrior_blocking = false;
+                }
+
+                if player.shielded[current_hero] > 0 {
+                    player.shielded[current_hero] -= 1;
+                }
+
+                // Sleep, or awaken if all asleep
+
+                player.sleep_state[current_hero] = true;
+
+                if player.sleep_state[0] && player.sleep_state[1] && player.sleep_state[2] {
+                    player.sleep_state = [false; 3];
+                }
+
+                // Cycle hero
+                cycle_hero(&mut player);
+
+                // Next state
+                next_battle_state.set(BattleState::Player);
                 next_info_state.set(InfoPanelState::Menu);
             }
             BattleState::Player => {
@@ -810,8 +954,9 @@ fn main() {
             Update,
             (
                 hero_arrow,
+                hero_animation,
                 hero_health_status,
-                hero_sleep_status,
+                hero_status,
                 (handle_event, tick_battle_info_timer).run_if(in_state(InfoPanelState::Battle)),
                 (menu_cursor, menu_cursor_change, menu_options, menu_select)
                     .run_if(in_state(InfoPanelState::Menu)),

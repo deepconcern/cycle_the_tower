@@ -2,13 +2,13 @@ use bevy::prelude::*;
 
 #[derive(Component)]
 pub struct Enemy {
-    current_hp: usize,
-    max_hp: usize,
+    pub current_hp: isize,
+    pub max_hp: isize,
     name: String,
 }
 
 impl Enemy {
-    pub fn new(name: &str, hp: usize) -> Self {
+    pub fn new(name: &str, hp: isize) -> Self {
         Self {
             current_hp: hp,
             max_hp: hp,
