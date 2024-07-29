@@ -42,7 +42,7 @@ fn enemy_name_text(
 
     // Update the name
 
-    text.sections[0].value = (&enemy.name).to_string();
+    text.sections[0].value = enemy.name.to_string();
 }
 
 pub struct EnemyPlugin;

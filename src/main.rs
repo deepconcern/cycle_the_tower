@@ -27,9 +27,9 @@ const HERO_SPRITE_SIZE: f32 = 32.0;
 const PLAYER_DISPLAY_TRANSLATION: Vec3 = Vec3::new(0.0, -(GAME_HEIGHT * SCALE_FACTOR * 0.25), 0.0);
 
 // Menu
-const MENU_BLOCK: f32 = (UNIT_SIZE * SCALE_FACTOR * 0.75);
+const MENU_BLOCK: f32 = UNIT_SIZE * SCALE_FACTOR * 0.75;
 const MENU_START_OFFSET: f32 = 1.5 * MENU_BLOCK;
-const MENU_OPTIONS: [[&'static str; 4]; 3] = [
+const MENU_OPTIONS: [[&str; 4]; 3] = [
     ["Attack", "Reckless Attack", "Block", "Cycle Hero"],
     [
         "Magic Missle",
@@ -49,7 +49,7 @@ const MAGIC_MISSLE_DAMAGE: u32 = 2;
 const ATTACK_DAMAGE: u32 = 1;
 const RECKLESS_ATTACK_DAMAGE: u32 = 3;
 const HEAL_AMOUNT: u32 = 3;
-const BLOCK_AMOUNT: u32 = 1;
+// const BLOCK_AMOUNT: u32 = 1;
 
 #[derive(Resource)]
 struct Player {
@@ -324,7 +324,7 @@ fn setup_scene(
                         scale_mode.clone(),
                         SpriteBundle {
                             sprite: Sprite {
-                                custom_size: size.clone(),
+                                custom_size: size,
                                 ..default()
                             },
                             texture: basic_background_texture_handle.clone(),
@@ -430,7 +430,7 @@ fn setup_scene(
                         scale_mode.clone(),
                         SpriteBundle {
                             sprite: Sprite {
-                                custom_size: size.clone(),
+                                custom_size: size,
                                 ..default()
                             },
                             texture: basic_background_texture_handle.clone(),
@@ -665,7 +665,6 @@ fn cycle_hero(player: &mut Player) {
             panic!("MAX ITERATION");
         }
     }
-    return;
 }
 
 fn menu_select(
