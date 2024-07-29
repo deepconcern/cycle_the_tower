@@ -524,7 +524,7 @@ fn hero_animation(mut hero_query: Query<(&mut Hero, &mut TextureAtlas)>, player:
     }
 }
 
-fn hero_status(player: Res<Player>, mut text_query: Query<(&mut HeroStatusText, &mut Text)>,) {
+fn hero_status(player: Res<Player>, mut text_query: Query<(&mut HeroStatusText, &mut Text)>) {
     for (hero_status_text, mut text) in text_query.iter_mut() {
         if player.current_hps[hero_status_text.0] <= 0 {
             text.sections[0].value = "DEAD".to_string();
@@ -802,48 +802,46 @@ fn handle_event(
         for mut text in info_text_query.iter_mut() {
             text.sections[0].value = match event {
                 ActionEvent::Player(player_action) => match player_action {
-                    PlayerAction::Mage(mage_action) => {
-                        match mage_action {
-                            MageAction::Missle => {
-                                enemy.current_hp -= MAGIC_MISSLE_DAMAGE as isize;
-    
-                                format!("Mage cast Magic Missle for {} damage!", MAGIC_MISSLE_DAMAGE)
-                            },
-                            MageAction::ShieldPriest => {
-                                player.shielded[2] = 2;
+                    PlayerAction::Mage(mage_action) => match mage_action {
+                        MageAction::Missle => {
+                            enemy.current_hp -= MAGIC_MISSLE_DAMAGE as isize;
 
-                                "Mage cast shield on Priest!".to_string()
-                            },
-                            MageAction::ShieldWarrior => {
-                                player.shielded[0] = 2;
+                            format!("Mage cast Magic Missle for {} damage!", MAGIC_MISSLE_DAMAGE)
+                        }
+                        MageAction::ShieldPriest => {
+                            player.shielded[2] = 2;
 
-                                "Mage cast shield on Warrior!".to_string()
-                            },
+                            "Mage cast shield on Priest!".to_string()
+                        }
+                        MageAction::ShieldWarrior => {
+                            player.shielded[0] = 2;
+
+                            "Mage cast shield on Warrior!".to_string()
                         }
                     },
-                    PlayerAction::Priest(priest_action) => {
-                        match priest_action {
-                            PriestAction::HealMage => heal_action(1, "Mage", &mut player),
-                            PriestAction::HealSelf => heal_action(2, "self", &mut player),
-                            PriestAction::HealWarrior => heal_action(0, "Warrior", &mut player),
-                        }
+                    PlayerAction::Priest(priest_action) => match priest_action {
+                        PriestAction::HealMage => heal_action(1, "Mage", &mut player),
+                        PriestAction::HealSelf => heal_action(2, "self", &mut player),
+                        PriestAction::HealWarrior => heal_action(0, "Warrior", &mut player),
                     },
                     PlayerAction::Warrior(warrior_action) => match warrior_action {
-                        WarriorAction::Attack => {enemy.current_hp -= ATTACK_DAMAGE as isize;
-                            
+                        WarriorAction::Attack => {
+                            enemy.current_hp -= ATTACK_DAMAGE as isize;
+
                             format!("Warrior attacks for {} damage!", ATTACK_DAMAGE)
-                        },
+                        }
                         WarriorAction::Block => {
                             player.is_warrior_blocking = true;
 
                             "Warrior blocks!".to_string()
-                        },
-                        WarriorAction::Reckless => {enemy.current_hp -= RECKLESS_ATTACK_DAMAGE as isize;
+                        }
+                        WarriorAction::Reckless => {
+                            enemy.current_hp -= RECKLESS_ATTACK_DAMAGE as isize;
 
                             player.current_hps[0] -= RECKLESS_ATTACK_DAMAGE as isize;
 
                             format!("Warrior recklessly attacks for {} damage! Also receives the same damage!", RECKLESS_ATTACK_DAMAGE)
-                        },
+                        }
                     },
                 },
                 ActionEvent::Enemy => {
@@ -862,16 +860,19 @@ fn handle_event(
                     player.current_hps[current_hero] -= damage as isize;
 
                     format!("Rat attacks for {} damage!", damage)
-                },
+                }
             };
         }
 
         if enemy.current_hp <= 0 {
             next_state.set(BattleState::Win);
-        } else if player.current_hps[0] <= 0 && player.current_hps[1] <= 0 && player.current_hps[2] <= 0 {
+        } else if player.current_hps[0] <= 0
+            && player.current_hps[1] <= 0
+            && player.current_hps[2] <= 0
+        {
             next_state.set(BattleState::Lose);
         }
-        
+
         battle_info_timer.0 = Some(Timer::new(Duration::from_secs(3), TimerMode::Once));
     }
 }
@@ -925,17 +926,17 @@ fn tick_battle_info_timer(
             BattleState::Player => {
                 next_battle_state.set(BattleState::Enemy);
                 action_event_writer.send(ActionEvent::Enemy);
-            },
-            BattleState::Lose=> {
+            }
+            BattleState::Lose => {
                 for mut text in info_text_query.iter_mut() {
                     text.sections[0].value = "You lose!".to_string();
                 }
-            },
-            BattleState::Win=> {
+            }
+            BattleState::Win => {
                 for mut text in info_text_query.iter_mut() {
                     text.sections[0].value = "You win!".to_string();
                 }
-            },
+            }
         }
     }
 }
