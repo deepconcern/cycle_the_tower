@@ -1,11 +1,10 @@
 [package]
 name = "cycle_the_heroes"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [dependencies]
 bevy = "0.14.0"
-bevy_dylib = "0.14"
 bevy_rand = "0.7"
 bevy_prng = { version = "0.7", features = ["rand_chacha", "wyrand"] }
 rand = "0.8"
