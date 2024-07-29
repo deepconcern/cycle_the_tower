@@ -3,7 +3,7 @@ mod mouse;
 
 use std::time::Duration;
 
-use bevy::{prelude::*, sprite::Anchor, text::Text2dBounds};
+use bevy::{asset::AssetMetaCheck, prelude::*, sprite::Anchor, text::Text2dBounds};
 use bevy_prng::WyRand;
 use bevy_rand::plugin::EntropyPlugin;
 use enemy::{Enemy, EnemyHealthText, EnemyNameText, EnemyPlugin};
@@ -946,6 +946,10 @@ fn main() {
         .add_event::<ActionEvent>()
         .add_plugins((
             DefaultPlugins
+                .set(AssetPlugin {
+                    meta_check: AssetMetaCheck::Never,
+                    ..default()
+                })
                 .set(ImagePlugin::default_nearest())
                 .set(WindowPlugin {
                     primary_window: Some(Window {
