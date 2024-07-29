@@ -3,7 +3,11 @@ use bevy::prelude::*;
 #[derive(Debug, Default, Resource)]
 pub struct MousePosition(pub Vec2);
 
-fn mouse_position(camera_query: Query<(&Camera, &GlobalTransform)>, mut mouse_position: ResMut<MousePosition>, window_query: Query<&Window>) {
+fn mouse_position(
+    camera_query: Query<(&Camera, &GlobalTransform)>,
+    mut mouse_position: ResMut<MousePosition>,
+    window_query: Query<&Window>,
+) {
     let (camera, camera_transform) = camera_query.single();
     let window = window_query.single();
 

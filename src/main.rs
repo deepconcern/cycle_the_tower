@@ -31,7 +31,12 @@ const MENU_BLOCK: f32 = (UNIT_SIZE * SCALE_FACTOR * 0.75);
 const MENU_START_OFFSET: f32 = 1.5 * MENU_BLOCK;
 const MENU_OPTIONS: [[&'static str; 4]; 3] = [
     ["Attack", "Reckless Attack", "Block", "Cycle Hero"],
-    ["Magic Missle", "Shield Warrior", "Shield Priest", "Cycle Hero"],
+    [
+        "Magic Missle",
+        "Shield Warrior",
+        "Shield Priest",
+        "Cycle Hero",
+    ],
     ["Heal Warrior", "Heal Mage", "Heal Self", "Cycle Hero"],
 ];
 
@@ -502,52 +507,51 @@ fn setup_menu(
         .get_entity(target_entity_id)
         .unwrap()
         .with_children(|parent| {
-            parent.spawn((
-                InfoPanelNode,
-                SpatialBundle::default(),
-            )).with_children(|parent| {
-                // Options
+            parent
+                .spawn((InfoPanelNode, SpatialBundle::default()))
+                .with_children(|parent| {
+                    // Options
 
-                for i in 0..4 {
-                    parent.spawn((
-                        MenuOption(i),
-                        Text2dBundle {
-                            text: Text::from_section(
-                                "MenuOption",
-                                TextStyle {
-                                    font: font_handle.clone(),
-                                    font_size: 20.0,
+                    for i in 0..4 {
+                        parent.spawn((
+                            MenuOption(i),
+                            Text2dBundle {
+                                text: Text::from_section(
+                                    "MenuOption",
+                                    TextStyle {
+                                        font: font_handle.clone(),
+                                        font_size: 20.0,
+                                        ..default()
+                                    },
+                                ),
+                                text_anchor: Anchor::CenterLeft,
+                                transform: Transform {
+                                    translation: Vec3::new(
+                                        -(UNIT_SIZE * SCALE_FACTOR * 2.0),
+                                        MENU_START_OFFSET - (i as f32 * MENU_BLOCK),
+                                        0.0,
+                                    ),
                                     ..default()
                                 },
-                            ),
-                            text_anchor: Anchor::CenterLeft,
+                                ..default()
+                            },
+                        ));
+                    }
+
+                    // Cursor
+                    parent.spawn((
+                        MenuArrow,
+                        SpriteBundle {
+                            texture: asset_server.load("arrow_right.png"),
                             transform: Transform {
-                                translation: Vec3::new(
-                                    -(UNIT_SIZE * SCALE_FACTOR * 2.0),
-                                    MENU_START_OFFSET - (i as f32 * MENU_BLOCK),
-                                    0.0,
-                                ),
+                                scale: SCALE_VEC3,
+                                translation: Vec3::new(-(UNIT_SIZE * SCALE_FACTOR * 3.0), 0.0, 0.0),
                                 ..default()
                             },
                             ..default()
-                        }
-                    ));
-                }
-
-                // Cursor
-                parent.spawn((
-                    MenuArrow,
-                    SpriteBundle {
-                        texture: asset_server.load("arrow_right.png"),
-                        transform: Transform {
-                            scale: SCALE_VEC3,
-                            translation: Vec3::new(-(UNIT_SIZE * SCALE_FACTOR * 3.0), 0.0, 0.0),
-                            ..default()
                         },
-                        ..default()
-                    },
-                ));
-            });
+                    ));
+                });
         });
 }
 
@@ -567,44 +571,52 @@ fn setup_info(
         .get_entity(target_entity_id)
         .unwrap()
         .with_children(|parent| {
-            parent.spawn((
-                InfoPanelNode,
-                SpatialBundle::default(),
-            )).with_children(|parent| {
-                // Info text
-                
-                parent.spawn((
-                    BattleInfoText,
-                    Text2dBundle {
-                        text: Text {
-                            linebreak_behavior: bevy::text::BreakLineOn::WordBoundary,
-                            justify: JustifyText::Left,
-                            sections: vec![TextSection::new("", TextStyle {
-                                font: font_handle.clone(),
-                                font_size: 20.0,
+            parent
+                .spawn((InfoPanelNode, SpatialBundle::default()))
+                .with_children(|parent| {
+                    // Info text
+
+                    parent.spawn((
+                        BattleInfoText,
+                        Text2dBundle {
+                            text: Text {
+                                linebreak_behavior: bevy::text::BreakLineOn::WordBoundary,
+                                justify: JustifyText::Left,
+                                sections: vec![TextSection::new(
+                                    "",
+                                    TextStyle {
+                                        font: font_handle.clone(),
+                                        font_size: 20.0,
+                                        ..default()
+                                    },
+                                )],
+                            },
+                            text_2d_bounds: Text2dBounds {
+                                size: Vec2::new(
+                                    UNIT_SIZE * SCALE_FACTOR * 6.0,
+                                    UNIT_SIZE * SCALE_FACTOR * 9.0,
+                                ),
+                            },
+                            text_anchor: Anchor::TopLeft,
+                            transform: Transform {
+                                translation: Vec3::new(
+                                    -(UNIT_SIZE * SCALE_FACTOR * 3.0),
+                                    BATTLE_INFO_START_OFFSET,
+                                    0.0,
+                                ),
                                 ..default()
-                            })]
-                        },
-                        text_2d_bounds: Text2dBounds {
-                            size: Vec2::new(UNIT_SIZE * SCALE_FACTOR * 6.0, UNIT_SIZE * SCALE_FACTOR * 9.0),
-                        },
-                        text_anchor: Anchor::TopLeft,
-                        transform: Transform {
-                            translation: Vec3::new(
-                                -(UNIT_SIZE * SCALE_FACTOR * 3.0),
-                                BATTLE_INFO_START_OFFSET,
-                                0.0,
-                            ),
+                            },
                             ..default()
                         },
-                        ..default()
-                    }
-                ));
-            });
+                    ));
+                });
         });
 }
 
-fn menu_cursor(mut arrow_query: Query<&mut Transform, With<MenuArrow>>, menu_selection: Res<MenuSelection>) {
+fn menu_cursor(
+    mut arrow_query: Query<&mut Transform, With<MenuArrow>>,
+    menu_selection: Res<MenuSelection>,
+) {
     for mut transform in arrow_query.iter_mut() {
         transform.translation.y = MENU_START_OFFSET - (menu_selection.0 as f32 * MENU_BLOCK);
     }
@@ -634,7 +646,7 @@ fn menu_options(mut menu_option_query: Query<(&mut MenuOption, &mut Text)>, play
     }
 }
 
-fn cycle_hero(player: &mut  Player) {
+fn cycle_hero(player: &mut Player) {
     let mut max_iteration = 100;
     loop {
         if player.current_hero == 2 {
@@ -652,11 +664,17 @@ fn cycle_hero(player: &mut  Player) {
         if max_iteration == 0 {
             panic!("MAX ITERATION");
         }
-    };
+    }
     return;
 }
 
-fn menu_select(mut action_event_writer: EventWriter<ActionEvent>, keys: Res<ButtonInput<KeyCode>>, menu_selection: Res<MenuSelection>, mut next_state: ResMut<NextState<InfoPanelState>>, mut player: ResMut<Player>) {
+fn menu_select(
+    mut action_event_writer: EventWriter<ActionEvent>,
+    keys: Res<ButtonInput<KeyCode>>,
+    menu_selection: Res<MenuSelection>,
+    mut next_state: ResMut<NextState<InfoPanelState>>,
+    mut player: ResMut<Player>,
+) {
     if keys.just_pressed(KeyCode::Enter) {
         // All heroes have cycle
         if menu_selection.0 == 3 {
@@ -664,7 +682,8 @@ fn menu_select(mut action_event_writer: EventWriter<ActionEvent>, keys: Res<Butt
             return;
         }
 
-        let event = ActionEvent::Player(if player.current_hero == 0 { // Warrior
+        let event = ActionEvent::Player(if player.current_hero == 0 {
+            // Warrior
             PlayerAction::Warrior(if menu_selection.0 == 0 {
                 WarriorAction::Attack
             } else if menu_selection.0 == 1 {
@@ -672,7 +691,8 @@ fn menu_select(mut action_event_writer: EventWriter<ActionEvent>, keys: Res<Butt
             } else {
                 WarriorAction::Block
             })
-        } else if player.current_hero == 1 { // Mage
+        } else if player.current_hero == 1 {
+            // Mage
             PlayerAction::Mage(if menu_selection.0 == 0 {
                 MageAction::Missle
             } else if menu_selection.0 == 1 {
@@ -680,7 +700,8 @@ fn menu_select(mut action_event_writer: EventWriter<ActionEvent>, keys: Res<Butt
             } else {
                 MageAction::ShieldPriest
             })
-        } else { // Priest
+        } else {
+            // Priest
             PlayerAction::Priest(if menu_selection.0 == 0 {
                 PriestAction::HealWarrior
             } else if menu_selection.0 == 1 {
@@ -695,7 +716,10 @@ fn menu_select(mut action_event_writer: EventWriter<ActionEvent>, keys: Res<Butt
     }
 }
 
-fn handle_event(mut action_event_reader: EventReader<ActionEvent>, mut info_text_query: Query<&mut Text, With<BattleInfoText>>) {
+fn handle_event(
+    mut action_event_reader: EventReader<ActionEvent>,
+    mut info_text_query: Query<&mut Text, With<BattleInfoText>>,
+) {
     for event in action_event_reader.read() {
         for mut text in info_text_query.iter_mut() {
             text.sections[0].value = match event {
@@ -721,8 +745,6 @@ fn handle_event(mut action_event_reader: EventReader<ActionEvent>, mut info_text
         }
     }
 }
-
-
 
 fn main() {
     App::new()
@@ -753,12 +775,8 @@ fn main() {
                 hero_health_status,
                 hero_sleep_status,
                 handle_event.run_if(in_state(InfoPanelState::Battle)),
-                (
-                    menu_cursor,
-                    menu_cursor_change,
-                    menu_options,
-                    menu_select,
-                ).run_if(in_state(InfoPanelState::Menu)),
+                (menu_cursor, menu_cursor_change, menu_options, menu_select)
+                    .run_if(in_state(InfoPanelState::Menu)),
             ),
         )
         .init_resource::<MenuSelection>()

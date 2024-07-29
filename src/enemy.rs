@@ -23,14 +23,20 @@ pub struct EnemyHealthText;
 #[derive(Component)]
 pub struct EnemyNameText;
 
-fn enemy_health_text(mut enemy_health_query: Query<&mut Text, With<EnemyHealthText>>, enemy_query: Query<&Enemy>) {
+fn enemy_health_text(
+    mut enemy_health_query: Query<&mut Text, With<EnemyHealthText>>,
+    enemy_query: Query<&Enemy>,
+) {
     let enemy = enemy_query.single();
     let mut text = enemy_health_query.single_mut();
 
     text.sections[0].value = format!("HP: {}/{}", enemy.current_hp, enemy.max_hp);
 }
 
-fn enemy_name_text(mut enemy_name_query: Query<&mut Text, With<EnemyNameText>>, enemy_query: Query<&Enemy>) {
+fn enemy_name_text(
+    mut enemy_name_query: Query<&mut Text, With<EnemyNameText>>,
+    enemy_query: Query<&Enemy>,
+) {
     let enemy = enemy_query.single();
     let mut text = enemy_name_query.single_mut();
 
